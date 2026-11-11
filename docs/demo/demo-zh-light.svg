@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="278" viewBox="0 0 860 278" role="img" aria-labelledby="t d" xml:space="preserve">
+<title id="t">wickrun-brain demo</title>
+<desc id="d">$ wickrun-brain status
+  settings file   ~/.claude/settings.json
+  mode            official login (no override)
+  overrides       none
+
+$ wickrun-brain use work-gateway
+Switched Claude Code to profile &quot;work-gateway&quot;: llm.example.com, model claude-sonnet-4-6.
+Updated ~/.claude/settings.json (original saved for &quot;restore&quot;).
+Start a new Claude Code session for the change to take effect.
+
+$ wickrun-brain status
+  settings file   ~/.claude/settings.json
+  mode            custom endpoint (profile &quot;work-gateway&quot;)
+  base URL host   llm.example.com
+  model           claude-sonnet-4-6
+  key             ANTHROPIC_AUTH_TOKEN …7f3a
+  backup          settings.json.before-wickrun-brain
+
+  Undo every change with: wickrun-brain restore
+
+$ wickrun-brain restore
+settings.json restored, byte-identical to the original (sha256 27dafb2742d0).
+Backup deleted.
+Start a new Claude Code session for the change to take effect.</desc>
+<style>text{font-family:ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', 'Noto Sans Mono CJK SC', monospace;font-size:13px;white-space:pre}.cap{font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans CJK SC',sans-serif;font-size:12px}@keyframes k0{0%,0.278%{opacity:0}0.283%,23.889%{opacity:1}23.894%,100%{opacity:0}}.l0{opacity:0;animation:k0 18s linear infinite}@keyframes k1{0%,1.944%{opacity:0}1.95%,23.889%{opacity:1}23.894%,100%{opacity:0}}.l1{opacity:0;animation:k1 18s linear infinite}@keyframes k2{0%,8.162%{opacity:0}8.168%,23.889%{opacity:1}23.894%,100%{opacity:0}}.l2{opacity:0;animation:k2 18s linear infinite}@keyframes k3{0%,8.44%{opacity:0}8.446%,23.889%{opacity:1}23.894%,100%{opacity:0}}.l3{opacity:0;animation:k3 18s linear infinite}@keyframes k4{0%,8.718%{opacity:0}8.724%,23.889%{opacity:1}23.894%,100%{opacity:0}}.l4{opacity:0;animation:k4 18s linear infinite}@keyframes k5{0%,24.722%{opacity:0}24.728%,47.222%{opacity:1}47.228%,100%{opacity:0}}.l5{opacity:0;animation:k5 18s linear infinite}@keyframes k6{0%,26.389%{opacity:0}26.394%,47.222%{opacity:1}47.228%,100%{opacity:0}}.l6{opacity:0;animation:k6 18s linear infinite}@keyframes k7{0%,34.744%{opacity:0}34.749%,47.222%{opacity:1}47.228%,100%{opacity:0}}.l7{opacity:0;animation:k7 18s linear infinite}@keyframes k8{0%,35.021%{opacity:0}35.027%,47.222%{opacity:1}47.228%,100%{opacity:0}}.l8{opacity:0;animation:k8 18s linear infinite}@keyframes k9{0%,35.299%{opacity:0}35.305%,47.222%{opacity:1}47.228%,100%{opacity:0}}.l9{opacity:0;animation:k9 18s linear infinite}@keyframes k10{0%,48.056%{opacity:0}48.061%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l10{opacity:0;animation:k10 18s linear infinite}@keyframes k11{0%,49.722%{opacity:0}49.728%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l11{opacity:0;animation:k11 18s linear infinite}@keyframes k12{0%,55.94%{opacity:0}55.946%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l12{opacity:0;animation:k12 18s linear infinite}@keyframes k13{0%,56.218%{opacity:0}56.224%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l13{opacity:0;animation:k13 18s linear infinite}@keyframes k14{0%,56.496%{opacity:0}56.501%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l14{opacity:0;animation:k14 18s linear infinite}@keyframes k15{0%,56.774%{opacity:0}56.779%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l15{opacity:0;animation:k15 18s linear infinite}@keyframes k16{0%,57.051%{opacity:0}57.057%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l16{opacity:0;animation:k16 18s linear infinite}@keyframes k17{0%,57.329%{opacity:0}57.335%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l17{opacity:0;animation:k17 18s linear infinite}@keyframes k18{0%,57.607%{opacity:0}57.612%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l18{opacity:0;animation:k18 18s linear infinite}@keyframes k19{0%,57.885%{opacity:0}57.89%,72.778%{opacity:1}72.783%,100%{opacity:0}}.l19{opacity:0;animation:k19 18s linear infinite}@keyframes k20{0%,73.611%{opacity:0}73.617%,96.667%{opacity:1}96.672%,100%{opacity:0}}.l20{opacity:0;animation:k20 18s linear infinite}@keyframes k21{0%,75.278%{opacity:0}75.283%,96.667%{opacity:1}96.672%,100%{opacity:0}}.l21{opacity:0;animation:k21 18s linear infinite}@keyframes k22{0%,81.709%{opacity:0}81.715%,96.667%{opacity:1}96.672%,100%{opacity:0}}.l22{opacity:0;animation:k22 18s linear infinite}@keyframes k23{0%,81.987%{opacity:0}81.993%,96.667%{opacity:1}96.672%,100%{opacity:0}}.l23{opacity:0;animation:k23 18s linear infinite}@keyframes k24{0%,82.265%{opacity:0}82.271%,96.667%{opacity:1}96.672%,100%{opacity:0}}.l24{opacity:0;animation:k24 18s linear infinite}@media (prefers-reduced-motion:reduce){.anim text{animation:none!important;opacity:0!important}.anim text.s2{opacity:1!important}}</style>
+<rect x="0.5" y="0.5" width="859" height="244" rx="9" fill="#f6f8fa" stroke="#d0d7de"/>
+<path d="M0.5 30V9.5a9 9 0 0 1 9-9H850.5a9 9 0 0 1 9 9V30Z" fill="#eaeef2" stroke="#d0d7de"/>
+<circle cx="20" cy="15" r="5.5" fill="#ff5f57"/>
+<circle cx="38" cy="15" r="5.5" fill="#febc2e"/>
+<circle cx="56" cy="15" r="5.5" fill="#28c840"/>
+<text x="430" y="19" text-anchor="middle" fill="#6e7781" class="cap">终端</text>
+<g class="anim">
+<text x="22" y="54" class="l0 s0"><tspan fill="#6e7781"># Claude Code 现在用的是哪个大脑？</tspan></text>
+<clipPath id="c1"><rect x="22" y="58" height="21" width="0"><animate attributeName="width" dur="18s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.019;0.062;0.239;1" values="15.7;15.7;176.7;176.7;15.7"/></rect></clipPath>
+<text x="22" y="73" class="l1 s0" clip-path="url(#c1)"><tspan fill="#0969da">$ </tspan><tspan fill="#1f2328">wickrun-brain status</tspan></text>
+<text x="22" y="92" class="l2 s0"><tspan fill="#6e7781">  settings file   </tspan><tspan fill="#1f2328">~/.claude/settings.json</tspan></text>
+<text x="22" y="111" class="l3 s0"><tspan fill="#6e7781">  mode            </tspan><tspan fill="#1a7f37">official login (no override)</tspan></text>
+<text x="22" y="130" class="l4 s0"><tspan fill="#6e7781">  overrides       </tspan><tspan fill="#1f2328">none</tspan></text>
+<text x="22" y="54" class="l5 s1"><tspan fill="#6e7781"># 切换到已保存的配置</tspan></text>
+<clipPath id="c6"><rect x="22" y="58" height="21" width="0"><animate attributeName="width" dur="18s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.264;0.328;0.472;1" values="15.7;15.7;255.2;255.2;15.7"/></rect></clipPath>
+<text x="22" y="73" class="l6 s1" clip-path="url(#c6)"><tspan fill="#0969da">$ </tspan><tspan fill="#1f2328">wickrun-brain use work-gateway</tspan></text>
+<text x="22" y="92" class="l7 s1"><tspan fill="#1f2328">Switched Claude Code to profile &quot;work-gateway&quot;: llm.example.com, model claude-sonnet-4-6.</tspan></text>
+<text x="22" y="111" class="l8 s1"><tspan fill="#1f2328">Updated ~/.claude/settings.json (original saved for &quot;restore&quot;).</tspan></text>
+<text x="22" y="130" class="l9 s1"><tspan fill="#1f2328">Start a new Claude Code session for the change to take effect.</tspan></text>
+<text x="22" y="54" class="l10 s2"><tspan fill="#6e7781"># 再看一次：密钥已打码</tspan></text>
+<clipPath id="c11"><rect x="22" y="58" height="21" width="0"><animate attributeName="width" dur="18s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.497;0.54;0.728;1" values="15.7;15.7;176.7;176.7;15.7"/></rect></clipPath>
+<text x="22" y="73" class="l11 s2" clip-path="url(#c11)"><tspan fill="#0969da">$ </tspan><tspan fill="#1f2328">wickrun-brain status</tspan></text>
+<text x="22" y="92" class="l12 s2"><tspan fill="#6e7781">  settings file   </tspan><tspan fill="#1f2328">~/.claude/settings.json</tspan></text>
+<text x="22" y="111" class="l13 s2"><tspan fill="#6e7781">  mode            </tspan><tspan fill="#1a7f37">custom endpoint (profile &quot;work-gateway&quot;)</tspan></text>
+<text x="22" y="130" class="l14 s2"><tspan fill="#6e7781">  base URL host   </tspan><tspan fill="#1f2328">llm.example.com</tspan></text>
+<text x="22" y="149" class="l15 s2"><tspan fill="#6e7781">  model           </tspan><tspan fill="#1f2328">claude-sonnet-4-6</tspan></text>
+<text x="22" y="168" class="l16 s2"><tspan fill="#6e7781">  key             </tspan><tspan fill="#1f2328">ANTHROPIC_AUTH_TOKEN …7f3a</tspan></text>
+<text x="22" y="187" class="l17 s2"><tspan fill="#6e7781">  backup          </tspan><tspan fill="#1f2328">settings.json.before-wickrun-brain</tspan></text>
+<text x="22" y="206" class="l18 s2"><tspan fill="#1f2328"></tspan></text>
+<text x="22" y="225" class="l19 s2"><tspan fill="#1f2328">  Undo every change with: wickrun-brain restore</tspan></text>
+<text x="22" y="54" class="l20 s3"><tspan fill="#6e7781"># 一键还原</tspan></text>
+<clipPath id="c21"><rect x="22" y="58" height="21" width="0"><animate attributeName="width" dur="18s" repeatCount="indefinite" calcMode="linear" keyTimes="0;0.753;0.798;0.967;1" values="15.7;15.7;184.55;184.55;15.7"/></rect></clipPath>
+<text x="22" y="73" class="l21 s3" clip-path="url(#c21)"><tspan fill="#0969da">$ </tspan><tspan fill="#1f2328">wickrun-brain restore</tspan></text>
+<text x="22" y="92" class="l22 s3"><tspan fill="#1a7f37">settings.json restored, byte-identical to the original (sha256 27dafb2742d0).</tspan></text>
+<text x="22" y="111" class="l23 s3"><tspan fill="#1f2328">Backup deleted.</tspan></text>
+<text x="22" y="130" class="l24 s3"><tspan fill="#1f2328">Start a new Claude Code session for the change to take effect.</tspan></text>
+</g>
+<text x="430" y="266" text-anchor="middle" fill="#57606a" class="cap">真实命令输出的示意</text>
+</svg>
