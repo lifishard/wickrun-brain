@@ -1,0 +1,26 @@
+{
+  "name": "wickrun-brain",
+  "version": "0.1.0",
+  "description": "See which model ('brain') your Claude Code is using, switch between saved setups, and restore your original config.",
+  "type": "module",
+  "bin": {
+    "wickrun-brain": "scripts/wickrun-brain.mjs"
+  },
+  "files": ["scripts/wickrun-brain.mjs", "skills", ".claude-plugin", "README.md", "README.zh-CN.md", "LICENSE"],
+  "scripts": {
+    "test": "node --test",
+    "build:demo": "node scripts/build-demo.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "lifishard",
+  "homepage": "https://github.com/lifishard/wickrun-brain",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lifishard/wickrun-brain.git"
+  },
+  "keywords": ["claude-code", "plugin", "settings", "llm-gateway", "model-switcher"],
+  "private": true
+}
