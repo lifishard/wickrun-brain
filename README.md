@@ -111,7 +111,7 @@ Start a new Claude Code session after switching. See "When it takes effect" abov
 The terminal CLI reads `env` from settings.json. According to Claude Code's gateway documentation, the VS Code extension checks credentials from its own `claudeCode.environmentVariables` setting before launching, and the Claude desktop app reads gateway routing from its own configuration, not from settings.json ([connect to a gateway](https://code.claude.com/docs/en/llm-gateway-connect)). Remote Control is unavailable while a custom base URL or key is active.
 
 **Which endpoints work?**
-Any endpoint that speaks the Anthropic Messages API, such as an LLM gateway your organization runs. The tool does not check the endpoint (it makes no network requests). Anthropic does not support routing Claude Code to non-Claude models through gateways.
+Any endpoint that speaks the Anthropic Messages API, such as an LLM gateway your organization runs. The tool does not check the endpoint (it makes no network requests). Pointing it at a non-Claude model behind such an endpoint can work, but it is outside what Anthropic officially supports: there is no guarantee on quality or compatibility, and a Claude Code update may break it.
 
 **`--auth x-api-key` asks me to approve the key?**
 Claude Code asks once, in interactive sessions, before an `ANTHROPIC_API_KEY` overrides your login. That is Claude Code's behaviour, not this tool's.

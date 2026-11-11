@@ -111,7 +111,7 @@ node wickrun-brain/scripts/wickrun-brain.mjs status
 终端里的 CLI 会读取 settings.json 里的 `env`。根据 Claude Code 的网关文档，VS Code 扩展在启动前从它自己的 `claudeCode.environmentVariables` 设置检查凭据，Claude 桌面应用从它自己的配置读取网关路由，而不是 settings.json（见 [连接网关](https://code.claude.com/docs/en/llm-gateway-connect)）。使用自定义端点或密钥时，Remote Control 不可用。
 
 **支持哪些端点？**
-任何兼容 Anthropic Messages API 的端点，比如你所在组织运行的 LLM 网关。工具不会检查端点（它不发任何网络请求）。Anthropic 不支持通过网关把 Claude Code 路由到非 Claude 模型。
+任何兼容 Anthropic Messages API 的端点，比如你所在组织运行的 LLM 网关。工具不会检查端点（它不发任何网络请求）。端点背后接的是非 Claude 模型时，技术上可以这样用，但这不在 Anthropic 的官方支持范围内：效果和兼容性没有官方保证，Claude Code 更新后也可能失效。
 
 **用了 `--auth x-api-key` 之后要我确认密钥？**
 在交互会话里，`ANTHROPIC_API_KEY` 第一次覆盖你的登录前，Claude Code 会请你确认一次。这是 Claude Code 的行为，不是本工具的。
