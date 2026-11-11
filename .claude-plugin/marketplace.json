@@ -1,0 +1,15 @@
+{
+  "name": "wickrun",
+  "description": "wickrun-brain: see, switch and restore the model Claude Code uses.",
+  "owner": {
+    "name": "lifishard",
+    "url": "https://github.com/lifishard"
+  },
+  "plugins": [
+    {
+      "name": "wickrun-brain",
+      "source": "./",
+      "description": "See which model ('brain') your Claude Code is using, switch between saved setups, and restore your original config."
+    }
+  ]
+}

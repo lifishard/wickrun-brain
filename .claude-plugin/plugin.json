@@ -1,0 +1,14 @@
+{
+  "name": "wickrun-brain",
+  "displayName": "wickrun-brain",
+  "version": "0.1.0",
+  "description": "See which model ('brain') your Claude Code is using, switch between saved setups, and restore your original config, without hand-editing settings files.",
+  "author": {
+    "name": "lifishard",
+    "url": "https://github.com/lifishard"
+  },
+  "homepage": "https://github.com/lifishard/wickrun-brain",
+  "repository": "https://github.com/lifishard/wickrun-brain",
+  "license": "MIT",
+  "keywords": ["model", "settings", "gateway", "switcher", "restore"]
+}
