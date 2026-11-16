@@ -14,7 +14,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 export const TOOL = 'wickrun-brain';
 
 /** Keys inside settings.json "env" that this tool may set or remove. Nothing else is ever edited. */
