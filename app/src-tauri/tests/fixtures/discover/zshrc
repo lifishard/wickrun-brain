@@ -1,0 +1,10 @@
+# my shell
+export PATH="$HOME/bin:$PATH"
+export DEEPSEEK_API_KEY="sk-deepseek-0123456789abcdefWXYZ"
+export OPENROUTER_API_KEY=sk-or-v1-0123456789abcdef0123ABCD  # comment
+MOONSHOT_API_KEY='sk-moon-singlequoted-1234567890'
+export OPENAI_API_KEY="$OTHER_KEY"
+# export ZHIPUAI_API_KEY=sk-commented-out-1234567890
+export DASHSCOPE_API_KEY=`cat ~/.dashscope`
+set -gx GROQ_API_KEY gsk_fish_1234567890abcdef
+$env:GEMINI_API_KEY="AIza-powershell-1234567890"

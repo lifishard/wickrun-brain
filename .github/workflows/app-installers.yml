@@ -1,0 +1,70 @@
+name: app installers
+
+# Builds unsigned installers for Windows, macOS and Linux when a version tag is pushed
+# (for example v0.2.0), and attaches them to a draft GitHub release for review.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: ''
+          - os: macos-latest
+            args: '--target universal-apple-darwin'
+          - os: ubuntu-22.04
+            args: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+      - name: Linux build dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install the Tauri CLI
+        working-directory: app
+        run: npm ci || npm install
+      - name: Test
+        working-directory: app/src-tauri
+        if: matrix.os != 'macos-latest'
+        run: cargo test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: 'wickrun-brain ${{ github.ref_name }}'
+          releaseBody: 'Unsigned builds. See the README for how to open them on Windows and macOS.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            app/src-tauri/target/**/release/bundle/**/*.msi
+            app/src-tauri/target/**/release/bundle/**/*.exe
+            app/src-tauri/target/**/release/bundle/**/*.dmg
+            app/src-tauri/target/**/release/bundle/**/*.deb
+            app/src-tauri/target/**/release/bundle/**/*.rpm
+            app/src-tauri/target/**/release/bundle/**/*.AppImage
+          retention-days: 7

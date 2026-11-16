@@ -1,0 +1,6 @@
+{"model":"gpt-test","messages":[
+  {"role":"system","content":"You are Claude Code.\n\nBe brief."},
+  {"role":"user","content":"Hi"},
+  {"role":"assistant","content":"Hello!"},
+  {"role":"user","content":[{"type":"text","text":"Look at this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBOR"}}]}],
+ "max_tokens":1024,"temperature":0.2}

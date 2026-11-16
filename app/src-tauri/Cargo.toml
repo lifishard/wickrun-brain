@@ -1,0 +1,42 @@
+[package]
+name = "wickrun-brain-gui"
+version = "0.2.0"
+description = "Give Claude Code a new brain: find the models on this machine and switch with one click"
+authors = ["lifishard"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "wickrun_brain_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+futures-util = "0.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rand = "0.8"
+sha2 = "0.10"
+url = "2"
+dirs = "5"
+bytes = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

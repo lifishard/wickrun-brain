@@ -1,0 +1,4 @@
+{"version":2,"claude":{"current":"kimi","providers":{
+ "kimi":{"id":"kimi","name":"Kimi","settingsConfig":{"env":{"ANTHROPIC_BASE_URL":"https://api.moonshot.cn/anthropic","ANTHROPIC_API_KEY":"sk-kimi-legacy-0123456789","ANTHROPIC_MODEL":"kimi-k3"}}},
+ "glm":{"id":"glm","name":"GLM","settingsConfig":{"env":{"ANTHROPIC_BASE_URL":"https://open.bigmodel.cn/api/anthropic","ANTHROPIC_AUTH_TOKEN":"glm-legacy-0123456789abc"}}}}},
+ "codex":{"current":"","providers":{}}}

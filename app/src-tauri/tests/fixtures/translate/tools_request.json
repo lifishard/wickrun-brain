@@ -1,0 +1,7 @@
+{"model":"claude-opus-4","max_tokens":512,"stream":true,"stop_sequences":["</done>"],
+ "tools":[{"name":"Read","description":"Read a file","input_schema":{"type":"object","properties":{"file_path":{"type":"string"}},"required":["file_path"]}},
+          {"type":"web_search_20250305","name":"web_search","max_uses":3}],
+ "tool_choice":{"type":"auto","disable_parallel_tool_use":true},
+ "messages":[{"role":"user","content":"Read a.txt"},
+  {"role":"assistant","content":[{"type":"text","text":"Sure."},{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"a.txt"}}]},
+  {"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[{"type":"text","text":"line1"}]},{"type":"tool_result","tool_use_id":"toolu_2","is_error":true,"content":"not found"},{"type":"text","text":"Now summarise"}]}]}

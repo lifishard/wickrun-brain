@@ -1,3 +1,4 @@
 * text=auto eol=lf
 *.svg text eol=lf
 *.png binary
+app/src-tauri/tests/fixtures/**/*.sse -text

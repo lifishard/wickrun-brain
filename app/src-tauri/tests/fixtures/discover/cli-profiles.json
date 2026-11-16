@@ -1,0 +1,1 @@
+{"version":1,"profiles":{"work":{"baseUrl":"https://llm.example.com","model":"gw-model-1","auth":"bearer","key":"sk-cli-stored-key-0123456789"},"envp":{"baseUrl":"https://api.deepseek.com/anthropic","model":"deepseek-flash","auth":"x-api-key","keyEnv":"WB_UNSET_VAR"}}}

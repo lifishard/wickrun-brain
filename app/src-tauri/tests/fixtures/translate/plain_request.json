@@ -1,0 +1,7 @@
+{"model":"claude-sonnet-4-5","max_tokens":1024,"stream":false,"temperature":0.2,
+ "system":[{"type":"text","text":"You are Claude Code."},{"type":"text","text":"Be brief.","cache_control":{"type":"ephemeral"}}],
+ "thinking":{"type":"enabled","budget_tokens":2048},
+ "metadata":{"user_id":"u"},
+ "messages":[{"role":"user","content":"Hi"},
+   {"role":"assistant","content":[{"type":"thinking","thinking":"hmm","signature":"sig"},{"type":"text","text":"Hello!"}]},
+   {"role":"user","content":[{"type":"text","text":"Look at this"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBOR"}}]}]}

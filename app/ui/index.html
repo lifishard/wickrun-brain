@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wickrun-brain</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1 id="title"></h1>
+    <div class="langs" role="group" id="langs"></div>
+  </header>
+
+  <main>
+    <section class="current" id="current" aria-live="polite"></section>
+    <p class="notice" id="notice"></p>
+    <div class="toolbar">
+      <button class="ghost" id="refresh"></button>
+    </div>
+    <div id="groups"></div>
+  </main>
+
+  <footer>
+    <label class="switch"><input type="checkbox" id="autostart"><span id="autostartLabel"></span></label>
+    <p class="hint" id="autostartHint"></p>
+    <p class="wickrun"><span id="footerWickrun"></span> <a href="#" id="footerWickrunLink"></a></p>
+    <p class="version" id="version"></p>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="i18n.js"></script>
+  <script src="mock.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

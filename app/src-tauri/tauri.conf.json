@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "wickrun-brain",
+  "version": "0.2.0",
+  "identifier": "com.lifishard.wickrun-brain",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "wickrun-brain",
+        "width": 760,
+        "height": 820,
+        "minWidth": 520,
+        "minHeight": 560
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Give Claude Code a new brain",
+    "longDescription": "See which models this computer can use and switch Claude Code to one of them with one click. Restore your original settings at any time.",
+    "copyright": "Copyright (c) 2026 lifishard. MIT License.",
+    "license": "MIT",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": { "depends": [] }
+    }
+  }
+}
