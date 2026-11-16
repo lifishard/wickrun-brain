@@ -9,6 +9,7 @@ async fn main() {
         upstream_base: std::env::var("WB_UPSTREAM").expect("WB_UPSTREAM"),
         upstream_key: std::env::var("WB_UPSTREAM_KEY").expect("WB_UPSTREAM_KEY"),
         model: std::env::var("WB_MODEL").expect("WB_MODEL"),
+        reasoning_effort: std::env::var("WB_REASONING_EFFORT").ok(),
     });
     println!("ANTHROPIC_BASE_URL=http://127.0.0.1:{}", p.port);
     println!("ANTHROPIC_AUTH_TOKEN={}", token);

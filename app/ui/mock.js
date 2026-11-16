@@ -14,6 +14,8 @@
     src({ id: 'ccswitch:official', group: 'ccswitch', name: 'Claude Official', origin: 'file:~/.cc-switch/cc-switch.db', status: 'not_compatible', route: 'none', base_url: '', note: 'cc_official' }),
     src({ id: 'gateway:omniroute:20128', group: 'gateway', name: 'OmniRoute', origin: 'url:http://127.0.0.1:20128', status: 'reachable', route: 'direct', base_url: 'http://127.0.0.1:20128', models: ['kr/claude-sonnet-4.5', 'gemini/gemini-3-pro'], default_model: 'kr/claude-sonnet-4.5' }),
     src({ id: 'gateway:litellm:4000', group: 'gateway', name: 'LiteLLM', origin: 'url:http://127.0.0.1:4000', status: 'needs_key', route: 'direct', base_url: 'http://127.0.0.1:4000' }),
+    src({ id: 'manual:5f2a9c', group: 'manual', name: 'My relay', origin: 'manual:keychain', status: 'reachable', route: 'direct', base_url: 'https://relay.example.com', key_masked: '…7Qd2', models: ['claude-sonnet-5'], default_model: 'claude-sonnet-5' }),
+    src({ id: 'manual:81be04', group: 'manual', name: 'Team gateway', origin: 'manual:file', status: 'reachable', route: 'translate', base_url: 'https://llm.example.org/v1', key_masked: '…a91F', models: ['qwen3.7-max'], default_model: 'qwen3.7-max', note: 'via_translator' }),
     src({ id: 'wickrunai', group: 'wickrunai', name: 'wickrunAI', origin: 'file:/Applications/wickrunAI.app', status: 'managed_elsewhere', route: 'none', base_url: '', note: 'wickrunai_detected' }),
   ];
   const currents = {
@@ -24,6 +26,14 @@
     wickrunai: { kind: 'wickrunai', label: null, model: 'kr/claude-sonnet-4.5', backup_exists: false, base_url: 'http://127.0.0.1:45123' },
   };
   const active = { direct: 'key:deepseek:env:DEEPSEEK_API_KEY', proxy: 'key:openai:env:OPENAI_API_KEY', down: 'key:openai:env:OPENAI_API_KEY' };
+  const manual = [
+    { id: 'manual:5f2a9c', name: 'My relay', base_url: 'https://relay.example.com', format: 'anthropic', model: 'claude-sonnet-5', key_store: 'keychain', key_masked: '…7Qd2' },
+    { id: 'manual:81be04', name: 'Team gateway', base_url: 'https://llm.example.org/v1', format: 'openai', model: 'qwen3.7-max', key_store: 'file', key_masked: '…a91F' },
+  ];
+  // Mirrors manual::thinking_support: direct -> claude_code, translated with a documented reasoning_effort -> reasoning_effort
+  const effortHosts = ['api.openai.com', 'generativelanguage.googleapis.com', 'api.groq.com'];
+  const supportOf = (s) => (s.route === 'direct' ? 'claude_code' : s.route === 'translate' && effortHosts.some((h) => s.base_url.includes(h)) ? 'reasoning_effort' : 'none');
+  const thinking = { 'key:deepseek:env:DEEPSEEK_API_KEY': 'high', 'key:openai:env:OPENAI_API_KEY': 'medium', 'manual:5f2a9c': 'low' };
   const view = () => ({
     current: Object.assign({ settings_file: '~/.claude/settings.json', credential_var: null, credential_masked: null }, currents[scenario] || currents.proxy),
     active_id: active[scenario] || null,
@@ -33,7 +43,11 @@
     proxy_error: null,
     wickrunai_installed: true,
     download_url: 'https://wickrunai.com',
-    version: '0.2.0',
+    version: '0.2.1',
+    thinking_support: Object.fromEntries(sources.map((s) => [s.id, supportOf(s)])),
+    thinking: Object.assign({}, thinking),
+    manual,
+    active_thinking: active[scenario] ? thinking[active[scenario]] || 'default' : null,
   });
   window.WB_MOCK = {
     async invoke(cmd, args) {
@@ -42,6 +56,9 @@
         case 'list_models': return (sources.find((s) => s.id === args.id) || {}).models || [];
         case 'test_source': return { ok: true, status: 200, ms: 842 };
         case 'get_autostart': return false;
+        case 'set_thinking': if (args.level === 'default') delete thinking[args.id]; else thinking[args.id] = args.level; return view();
+        case 'detect_manual': return { format: 'anthropic', base_url: (args.baseUrl || '').replace(/\/+$/, '').replace(/\/v1$/, ''), models: ['claude-sonnet-5', 'claude-opus-5-5', 'gpt-5.2'], key_refused: false };
+        case 'add_manual': return ['manual:new', view()];
         default: return view();
       }
     },

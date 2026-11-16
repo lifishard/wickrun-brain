@@ -25,6 +25,8 @@ pub struct Route {
     pub upstream_base: String,
     pub upstream_key: String,
     pub model: String,
+    /// `reasoning_effort` to add to every request, for providers that document it
+    pub reasoning_effort: Option<String>,
 }
 
 pub struct Inner {
@@ -72,6 +74,11 @@ async fn authorize(inner: &Inner, h: &HeaderMap) -> Result<Route, Response> {
     inner.route.read().await.clone().ok_or_else(|| err(503, "overloaded_error", "wickrun-brain: no source is selected in the app"))
 }
 
+fn upstream_failed(e: reqwest::Error) -> Response {
+    let what = if e.is_timeout() { "timed out" } else if e.is_connect() { "could not connect" } else { "request failed" };
+    err(502, "api_error", &format!("wickrun-brain: upstream {}", what))
+}
+
 async fn messages(State(inner): State<Arc<Inner>>, h: HeaderMap, body: Bytes) -> Response {
     let route = match authorize(&inner, &h).await {
         Ok(r) => r,
@@ -82,20 +89,40 @@ async fn messages(State(inner): State<Arc<Inner>>, h: HeaderMap, body: Bytes) ->
         Err(_) => return err(400, "invalid_request_error", "request body is not valid JSON"),
     };
     let model = translate::pick_model(req.get("model").and_then(|m| m.as_str()), &route.model);
-    let oreq = match translate::request_to_openai(&req, &model) {
+    let mut oreq = match translate::request_to_openai(&req, &model) {
         Ok(v) => v,
         Err(e) => return err(400, "invalid_request_error", &e),
     };
+    translate::apply_reasoning(&mut oreq, route.reasoning_effort.as_deref());
     let stream = oreq.get("stream").and_then(|s| s.as_bool()) == Some(true);
     let url = format!("{}/chat/completions", route.upstream_base.trim_end_matches('/'));
-    let resp = match inner.client.post(&url).bearer_auth(&route.upstream_key).json(&oreq).send().await {
-        Ok(r) => r,
-        Err(e) => {
-            let what = if e.is_timeout() { "timed out" } else if e.is_connect() { "could not connect" } else { "request failed" };
-            return err(502, "api_error", &format!("wickrun-brain: upstream {}", what));
-        }
+    let send = |body: Value| {
+        let inner = inner.clone();
+        let url = url.clone();
+        let key = route.upstream_key.clone();
+        async move { inner.client.post(&url).bearer_auth(&key).json(&body).send().await }
     };
-    let status = resp.status().as_u16();
+    let mut resp = match send(oreq.clone()).await {
+        Ok(r) => r,
+        Err(e) => return upstream_failed(e),
+    };
+    let mut status = resp.status().as_u16();
+    if !(200..300).contains(&status) && route.reasoning_effort.is_some() {
+        // A model that does not take reasoning_effort: try once more without it.
+        let b = resp.bytes().await.unwrap_or_default();
+        if !translate::rejected_reasoning(status, &b) {
+            let (s, body) = translate::map_error(status, &b);
+            return (StatusCode::from_u16(s).unwrap_or(StatusCode::BAD_GATEWAY), Json(body)).into_response();
+        }
+        if let Some(o) = oreq.as_object_mut() {
+            o.remove("reasoning_effort");
+        }
+        resp = match send(oreq.clone()).await {
+            Ok(r) => r,
+            Err(e) => return upstream_failed(e),
+        };
+        status = resp.status().as_u16();
+    }
     if !(200..300).contains(&status) {
         let b = resp.bytes().await.unwrap_or_default();
         let (s, body) = translate::map_error(status, &b);
@@ -223,6 +250,8 @@ mod tests {
                 "rate" => (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": {"message": "slow down"}}))).into_response(),
                 "auth" => (StatusCode::UNAUTHORIZED, Json(json!({"error": {"message": "bad key"}}))).into_response(),
                 "down" => (StatusCode::INTERNAL_SERVER_ERROR, "oops").into_response(),
+                "noreason" if v.get("reasoning_effort").is_some() => (StatusCode::BAD_REQUEST, Json(json!({"error": {"message": "Unsupported parameter: 'reasoning_effort'"}}))).into_response(),
+                "reason" | "noreason" => Json(json!({"choices": [{"message": {"content": format!("effort={}", v.get("reasoning_effort").and_then(|e| e.as_str()).unwrap_or("-"))}, "finish_reason": "stop"}]})).into_response(),
                 _ if v["stream"] == true => {
                     let s = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_x\",\"function\":{\"name\":\"Read\",\"arguments\":\"{\\\"p\\\":1}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n";
                     Response::builder().header("content-type", "text/event-stream").body(Body::from(s)).unwrap()
@@ -237,9 +266,13 @@ mod tests {
     }
 
     async fn setup(model: &str) -> (Proxy, reqwest::Client) {
+        setup_with(model, None).await
+    }
+
+    async fn setup_with(model: &str, effort: Option<&str>) -> (Proxy, reqwest::Client) {
         let up = fake_upstream().await;
         let p = start(0, "tok-123".into()).await.unwrap();
-        *p.inner.route.write().await = Some(Route { upstream_base: format!("http://127.0.0.1:{}/v1", up), upstream_key: "upstream-secret-key".into(), model: model.into() });
+        *p.inner.route.write().await = Some(Route { upstream_base: format!("http://127.0.0.1:{}/v1", up), upstream_key: "upstream-secret-key".into(), model: model.into(), reasoning_effort: effort.map(String::from) });
         (p, reqwest::Client::new())
     }
 
@@ -264,6 +297,17 @@ mod tests {
         assert_eq!(v["error"]["type"], "authentication_error");
         let r = c.post(&url).json(&body()).send().await.unwrap();
         assert_eq!(r.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn reasoning_effort_is_sent_and_dropped_once_if_refused() {
+        for (model, effort, want) in [("reason", Some("high"), "effort=high"), ("reason", None, "effort=-"), ("noreason", Some("low"), "effort=-")] {
+            let (p, c) = setup_with(model, effort).await;
+            let r = c.post(format!("http://127.0.0.1:{}/v1/messages", p.port)).header("x-api-key", "tok-123").json(&body()).send().await.unwrap();
+            assert_eq!(r.status(), 200, "{} {:?}", model, effort);
+            let v: Value = r.json().await.unwrap();
+            assert_eq!(v["content"][0]["text"], want);
+        }
     }
 
     #[tokio::test]
@@ -296,7 +340,7 @@ mod tests {
     #[tokio::test]
     async fn unreachable_upstream_is_502_and_binds_loopback_only() {
         let p = start(0, "t".into()).await.unwrap();
-        *p.inner.route.write().await = Some(Route { upstream_base: "http://127.0.0.1:9/v1".into(), upstream_key: "k".into(), model: "m".into() });
+        *p.inner.route.write().await = Some(Route { upstream_base: "http://127.0.0.1:9/v1".into(), upstream_key: "k".into(), model: "m".into(), reasoning_effort: None });
         let r = reqwest::Client::new().post(format!("http://127.0.0.1:{}/v1/messages", p.port)).header("x-api-key", "t").json(&body()).send().await.unwrap();
         assert_eq!(r.status(), 502);
         // not reachable on other interfaces: the listener is bound to 127.0.0.1
@@ -309,7 +353,7 @@ mod tests {
         let c = reqwest::Client::new();
         let r = c.post(format!("http://127.0.0.1:{}/v1/messages", p.port)).header("x-api-key", "t").json(&body()).send().await.unwrap();
         assert_eq!(r.status(), 503);
-        *p.inner.route.write().await = Some(Route { upstream_base: "http://127.0.0.1:9/v1".into(), upstream_key: "k".into(), model: "m".into() });
+        *p.inner.route.write().await = Some(Route { upstream_base: "http://127.0.0.1:9/v1".into(), upstream_key: "k".into(), model: "m".into(), reasoning_effort: None });
         let v: Value = c.post(format!("http://127.0.0.1:{}/v1/messages/count_tokens", p.port)).header("x-api-key", "t").json(&body()).send().await.unwrap().json().await.unwrap();
         assert!(v["input_tokens"].as_u64().unwrap() > 0);
     }

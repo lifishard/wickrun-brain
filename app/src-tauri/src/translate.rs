@@ -171,6 +171,35 @@ pub fn request_to_openai(req: &Value, model: &str) -> Result<Value, String> {
     Ok(Value::Object(out))
 }
 
+/// The upstream's reasoning parameter for a thinking level, only for providers that document
+/// `reasoning_effort` on their Chat Completions API (OpenAI, Gemini's OpenAI compatibility, Groq).
+/// Anything else gets None: nothing is sent.
+pub fn reasoning_effort_for(provider_id: Option<&str>, level: crate::settings::Level) -> Option<&'static str> {
+    use crate::settings::Level;
+    if !matches!(provider_id, Some("openai") | Some("gemini") | Some("groq")) {
+        return None;
+    }
+    match level {
+        Level::Default => None,
+        Level::Off => Some("none"),
+        Level::Low => Some("low"),
+        Level::Medium => Some("medium"),
+        Level::High => Some("high"),
+    }
+}
+
+/// Add `reasoning_effort` to a Chat Completions body (or leave it as it is for None).
+pub fn apply_reasoning(oreq: &mut Value, effort: Option<&str>) {
+    if let (Some(e), Some(o)) = (effort, oreq.as_object_mut()) {
+        o.insert("reasoning_effort".into(), json!(e));
+    }
+}
+
+/// Did the upstream refuse the request because of `reasoning_effort` (a model that does not take it)?
+pub fn rejected_reasoning(status: u16, body: &[u8]) -> bool {
+    (status == 400 || status == 422) && String::from_utf8_lossy(body).to_lowercase().contains("reasoning")
+}
+
 pub fn map_finish_reason(r: Option<&str>, has_tool_calls: bool) -> &'static str {
     match r {
         Some("length") => "max_tokens",
@@ -610,5 +639,26 @@ mod tests {
         assert!(p.push(b"data: {\"a\"").is_empty());
         assert_eq!(p.push(b":1}\r\n\r\ndata: [DONE]\r\n\r\n"), vec!["{\"a\":1}".to_string(), "[DONE]".to_string()]);
         assert!(p.push(b": keep-alive comment\n\n").is_empty());
+    }
+
+    #[test]
+    fn reasoning_mapping_only_where_documented() {
+        use crate::settings::Level;
+        assert_eq!(reasoning_effort_for(Some("openai"), Level::High), Some("high"));
+        assert_eq!(reasoning_effort_for(Some("gemini"), Level::Off), Some("none"));
+        assert_eq!(reasoning_effort_for(Some("groq"), Level::Low), Some("low"));
+        assert_eq!(reasoning_effort_for(Some("openai"), Level::Default), None);
+        assert_eq!(reasoning_effort_for(None, Level::High), None);
+        assert_eq!(reasoning_effort_for(Some("deepseek"), Level::High), None);
+        let req: Value = serde_json::from_str(include_str!("../tests/fixtures/translate/plain_request.json")).unwrap();
+        let mut o = request_to_openai(&req, "gpt").unwrap();
+        let before = o.clone();
+        apply_reasoning(&mut o, None);
+        assert_eq!(o, before);
+        apply_reasoning(&mut o, reasoning_effort_for(Some("openai"), Level::Medium));
+        assert_eq!(o["reasoning_effort"], "medium");
+        assert!(rejected_reasoning(400, br#"{"error":{"message":"Unsupported parameter: 'reasoning_effort'"}}"#));
+        assert!(!rejected_reasoning(401, b"reasoning"));
+        assert!(!rejected_reasoning(400, b"bad model"));
     }
 }

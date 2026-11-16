@@ -1,0 +1,9 @@
+{
+  "messages_status": 404,
+  "messages_body": null,
+  "chat_base": "https://api.example.cn/compatible-mode/v1",
+  "chat_status": 400,
+  "chat_body": {"error": {"code": "invalid_parameter_error", "message": "model is required"}},
+  "models_status": 200,
+  "models_body": {"data": [{"id": "qwen-max"}]}
+}

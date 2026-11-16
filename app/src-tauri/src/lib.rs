@@ -3,6 +3,8 @@
 //! SPDX-License-Identifier: MIT
 
 pub mod discover;
+pub mod keystore;
+pub mod manual;
 pub mod proxy;
 pub mod settings;
 pub mod translate;
@@ -10,7 +12,8 @@ pub mod translate;
 use discover::{AuthKind, KeyRef, Route, Source};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use settings::AppError;
+use manual::{ManualEntry, ManualInput};
+use settings::{AppError, Level};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -29,6 +32,12 @@ pub struct Active {
     /// For translated routes: OpenAI-style upstream base
     pub upstream_base: String,
     pub key: KeyRef,
+    /// The thinking level chosen with this switch
+    #[serde(default)]
+    pub thinking: Level,
+    /// What the translator adds as `reasoning_effort` (translated routes only)
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
 }
 
 /// The app's own small state file (0600). Never holds a key except ones the user pasted.
@@ -40,6 +49,12 @@ pub struct GuiState {
     pub active: Option<Active>,
     #[serde(default)]
     pub pasted_keys: BTreeMap<String, String>,
+    /// Entries added by hand (keys are in the keychain or manual-keys.json, not here)
+    #[serde(default)]
+    pub manual: Vec<ManualEntry>,
+    /// Thinking level per source id (absent = Default)
+    #[serde(default)]
+    pub thinking: BTreeMap<String, Level>,
 }
 
 pub fn config_dir() -> Option<PathBuf> {
@@ -48,6 +63,19 @@ pub fn config_dir() -> Option<PathBuf> {
     } else {
         std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()).or_else(|| dirs::home_dir().map(|h| h.join(".config"))).map(|d| d.join("wickrun-brain"))
     }
+}
+
+fn key_store() -> Option<keystore::KeyStore> {
+    config_dir().map(|d| keystore::KeyStore::system(&d))
+}
+
+fn stored_key(st: &GuiState, id: &str) -> Option<String> {
+    let e = st.manual.iter().find(|e| e.id == id)?;
+    key_store()?.load(&e.id, e.key_store)
+}
+
+fn manual_sources(st: &GuiState) -> Vec<Source> {
+    st.manual.iter().map(|e| manual::to_source(e, stored_key(st, &e.id).is_some())).collect()
 }
 
 fn state_file() -> Option<PathBuf> {
@@ -95,6 +123,7 @@ pub fn resolve_key(k: &KeyRef, source_id: &str, st: &GuiState) -> Option<String>
             discover::ccswitch_dirs(&home, dirs::data_dir().as_deref()).iter().find_map(|d| discover::read_ccswitch(d)).and_then(|l| l.into_iter().find(|p| &p.id == id)).and_then(|p| p.key)
         }
         KeyRef::Placeholder(s) => Some(s.clone()),
+        KeyRef::Stored { id } => stored_key(st, id),
         KeyRef::Pasted | KeyRef::None => None,
     };
     v.filter(|s| !s.is_empty()).or_else(|| st.pasted_keys.get(source_id).cloned())
@@ -142,6 +171,8 @@ async fn run_discovery(st: &GuiState, took_over: bool) -> (Vec<Source>, Option<P
             }
         }
     }
+    // 6: entries added by hand
+    out.extend(manual_sources(st));
     // Keys the user pasted turn "needs key" into usable
     for s in out.iter_mut() {
         if s.status == "needs_key" {
@@ -234,6 +265,28 @@ pub struct View {
     pub wickrunai_installed: bool,
     pub download_url: &'static str,
     pub version: &'static str,
+    /// Per source id: claude_code | reasoning_effort | none
+    pub thinking_support: BTreeMap<String, &'static str>,
+    /// Saved thinking level per source id
+    pub thinking: BTreeMap<String, Level>,
+    /// Entries added by hand, for the edit form (no keys)
+    pub manual: Vec<ManualEntry>,
+    /// The thinking level of the current choice, when the app made it
+    pub active_thinking: Option<Level>,
+}
+
+fn active_id_thinking(app: &App) -> Option<Level> {
+    app.state.active.as_ref().map(|a| a.thinking)
+}
+
+/// The level to use for a source: the one asked for, else the saved one; Default where nothing can honour it.
+fn level_for(app: &App, s: &Source, asked: Option<Level>) -> Level {
+    let l = asked.or_else(|| app.state.thinking.get(&s.id).copied()).unwrap_or_default();
+    if manual::thinking_support(s) == "none" { Level::Default } else { l }
+}
+
+fn reasoning_for(s: &Source, level: Level) -> Option<String> {
+    translate::reasoning_effort_for(manual::reasoning_provider(s), level).map(String::from)
 }
 
 fn view(app: &App) -> View {
@@ -257,6 +310,10 @@ fn view(app: &App) -> View {
         wickrunai_installed: app.wickrunai_path.is_some(),
         download_url: DOWNLOAD_URL,
         version: env!("CARGO_PKG_VERSION"),
+        thinking_support: app.sources.iter().map(|s| (s.id.clone(), manual::thinking_support(s))).collect(),
+        thinking: app.state.thinking.clone(),
+        manual: app.state.manual.clone(),
+        active_thinking: active_id_thinking(app),
     }
 }
 
@@ -316,7 +373,20 @@ fn classify(status: u16) -> &'static str {
     }
 }
 
-async fn test_call(route: Route, base: &str, auth: AuthKind, key: &str, model: &str) -> TestResult {
+async fn test_call(route: Route, base: &str, auth: AuthKind, key: &str, model: &str, reasoning: Option<&str>) -> TestResult {
+    let r = test_once(route, base, auth, key, model, reasoning).await;
+    // Same rule as the translator: a model that refuses reasoning_effort is retried without it.
+    if let (false, Some(_), Some(true)) = (r.0.ok, reasoning, r.1) {
+        let mut again = test_once(route, base, auth, key, model, None).await.0;
+        if again.ok {
+            again.code = Some("reasoning_dropped".into());
+        }
+        return again;
+    }
+    r.0
+}
+
+async fn test_once(route: Route, base: &str, auth: AuthKind, key: &str, model: &str, reasoning: Option<&str>) -> (TestResult, Option<bool>) {
     let c = reqwest::Client::builder().timeout(std::time::Duration::from_secs(45)).build().unwrap();
     let t0 = std::time::Instant::now();
     let req = match route {
@@ -325,7 +395,11 @@ async fn test_call(route: Route, base: &str, auth: AuthKind, key: &str, model: &
             let r = match auth { AuthKind::ApiKey => r.header("x-api-key", key), AuthKind::Bearer => r.bearer_auth(key) };
             r.json(&json!({"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": "Reply with the word OK"}]}))
         }
-        _ => c.post(format!("{}/chat/completions", base.trim_end_matches('/'))).bearer_auth(key).json(&json!({"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": "Reply with the word OK"}]})),
+        _ => {
+            let mut body = json!({"model": model, "max_tokens": 16, "messages": [{"role": "user", "content": "Reply with the word OK"}]});
+            translate::apply_reasoning(&mut body, reasoning);
+            c.post(format!("{}/chat/completions", base.trim_end_matches('/'))).bearer_auth(key).json(&body)
+        }
     };
     match req.send().await {
         Ok(r) => {
@@ -333,14 +407,14 @@ async fn test_call(route: Route, base: &str, auth: AuthKind, key: &str, model: &
             let body = r.bytes().await.unwrap_or_default();
             let ms = t0.elapsed().as_millis();
             if (200..300).contains(&status) {
-                TestResult { ok: true, status: Some(status), ms, code: None, message: None }
+                (TestResult { ok: true, status: Some(status), ms, code: None, message: None }, None)
             } else {
                 let (_, e) = translate::map_error(status, &body);
                 let msg: String = e["error"]["message"].as_str().unwrap_or("").replace(key, "…").chars().take(300).collect();
-                TestResult { ok: false, status: Some(status), ms, code: Some(classify(status).into()), message: Some(msg) }
+                (TestResult { ok: false, status: Some(status), ms, code: Some(classify(status).into()), message: Some(msg) }, Some(translate::rejected_reasoning(status, &body)))
             }
         }
-        Err(e) => TestResult { ok: false, status: None, ms: t0.elapsed().as_millis(), code: Some("network".into()), message: Some(if e.is_timeout() { "timed out".into() } else { "could not connect".into() }) },
+        Err(e) => (TestResult { ok: false, status: None, ms: t0.elapsed().as_millis(), code: Some("network".into()), message: Some(if e.is_timeout() { "timed out".into() } else { "could not connect".into() }) }, None),
     }
 }
 
@@ -383,6 +457,9 @@ mod commands {
             let mut r = c.get(format!("{}/models", lb.trim_end_matches('/')));
             if let Some(k) = &key {
                 r = r.bearer_auth(k);
+                if s.group == "manual" && s.route == Route::Direct {
+                    r = r.header("x-api-key", k).header("anthropic-version", "2023-06-01");
+                }
             }
             r.send().await.ok().filter(|r| r.status().is_success())
         } else if s.base_url.starts_with("https://api.anthropic.com") {
@@ -404,38 +481,41 @@ mod commands {
     }
 
     #[tauri::command]
-    pub async fn test_source(app: State<'_, Shared>, id: String, model: String, endpoint: Option<String>) -> R<TestResult> {
+    pub async fn test_source(app: State<'_, Shared>, id: String, model: String, endpoint: Option<String>, thinking: Option<Level>) -> R<TestResult> {
         settings::validate_model(&model)?;
-        let (s, key, base) = {
+        let (s, key, base, reasoning) = {
             let a = app.lock().await;
             let s = find(&a, &id)?.clone();
             let key = resolve_key(&s.key, &s.id, &a.state).ok_or_else(|| AppError::new("no_key", "no key"))?;
             let base = pick_base(&s, endpoint.as_deref())?;
-            (s, key, base)
+            let reasoning = reasoning_for(&s, level_for(&a, &s, thinking));
+            (s, key, base, reasoning)
         };
         if s.route == Route::None {
             return Err(AppError::new("not_compatible", "not compatible"));
         }
-        Ok(test_call(s.route, &base, s.auth, &key, &model).await)
+        Ok(test_call(s.route, &base, s.auth, &key, &model, reasoning.as_deref()).await)
     }
 
     #[tauri::command]
-    pub async fn use_source(app: State<'_, Shared>, id: String, model: String, endpoint: Option<String>) -> R<View> {
+    pub async fn use_source(app: State<'_, Shared>, id: String, model: String, endpoint: Option<String>, thinking: Option<Level>) -> R<View> {
         settings::validate_model(&model)?;
         let file = settings_file()?;
         let mut a = app.lock().await;
         let s = find(&a, &id)?.clone();
         let key = resolve_key(&s.key, &s.id, &a.state).ok_or_else(|| AppError::new("no_key", "no key"))?;
         let base = pick_base(&s, endpoint.as_deref())?;
+        let level = level_for(&a, &s, thinking);
         match s.route {
             Route::None => return Err(AppError::new("not_compatible", "not compatible")),
             Route::Direct => {
                 let auth = match s.auth { AuthKind::ApiKey => settings::Auth::ApiKey, AuthKind::Bearer => settings::Auth::Bearer };
-                settings::apply(&file, &settings::Target { base_url: &base, auth, key: &key, model: &model })?;
+                let thinking = manual::direct_thinking_env(&s, &base, level);
+                settings::apply(&file, &settings::Target { base_url: &base, thinking, auth, key: &key, model: &model })?;
                 if let Some(p) = &a.proxy {
                     *p.inner.route.write().await = None;
                 }
-                a.state.active = Some(Active { source_id: s.id.clone(), name: s.name.clone(), model: model.clone(), route: Route::Direct, upstream_base: base, key: s.key.clone() });
+                a.state.active = Some(Active { source_id: s.id.clone(), name: s.name.clone(), model: model.clone(), route: Route::Direct, upstream_base: base, key: s.key.clone(), thinking: level, reasoning_effort: None });
             }
             Route::Translate => {
                 // Check first that settings.json can be changed at all (wickrunAI takeover, broken JSON).
@@ -450,12 +530,19 @@ mod commands {
                 }
                 ensure_proxy(&mut a).await?;
                 let p = a.proxy.clone().unwrap();
-                *p.inner.route.write().await = Some(proxy::Route { upstream_base: base.clone(), upstream_key: key.clone(), model: model.clone() });
+                let reasoning = reasoning_for(&s, level);
+                *p.inner.route.write().await = Some(proxy::Route { upstream_base: base.clone(), upstream_key: key.clone(), model: model.clone(), reasoning_effort: reasoning.clone() });
                 let token = a.state.proxy_token.clone().unwrap();
                 let local = format!("http://127.0.0.1:{}", p.port);
-                settings::apply(&file, &settings::Target { base_url: &local, auth: settings::Auth::Bearer, key: &token, model: &model })?;
-                a.state.active = Some(Active { source_id: s.id.clone(), name: s.name.clone(), model: model.clone(), route: Route::Translate, upstream_base: base, key: s.key.clone() });
+                // The level goes to the upstream as reasoning_effort; settings.json keeps the original thinking values.
+                settings::apply(&file, &settings::Target { base_url: &local, thinking: vec![], auth: settings::Auth::Bearer, key: &token, model: &model })?;
+                a.state.active = Some(Active { source_id: s.id.clone(), name: s.name.clone(), model: model.clone(), route: Route::Translate, upstream_base: base, key: s.key.clone(), thinking: level, reasoning_effort: reasoning });
             }
+        }
+        if level == Level::Default {
+            a.state.thinking.remove(&s.id);
+        } else {
+            a.state.thinking.insert(s.id.clone(), level);
         }
         if let Some(f) = state_file() {
             save_state(&f, &a.state)?;
@@ -483,6 +570,112 @@ mod commands {
             save_state(&f, &a.state)?;
         }
         Ok(view(&a))
+    }
+
+    /// Remember a thinking level for a source without switching.
+    #[tauri::command]
+    pub async fn set_thinking(app: State<'_, Shared>, id: String, level: Level) -> R<View> {
+        let mut a = app.lock().await;
+        let s = find(&a, &id)?.clone();
+        let level = level_for(&a, &s, Some(level));
+        if level == Level::Default {
+            a.state.thinking.remove(&id);
+        } else {
+            a.state.thinking.insert(id, level);
+        }
+        if let Some(f) = state_file() {
+            save_state(&f, &a.state)?;
+        }
+        Ok(view(&a))
+    }
+
+    fn refresh_manual(a: &mut App) {
+        a.sources.retain(|s| s.group != "manual");
+        let m = manual_sources(&a.state);
+        a.sources.extend(m);
+    }
+
+    #[tauri::command]
+    pub async fn add_manual(app: State<'_, Shared>, input: ManualInput) -> R<(String, View)> {
+        let (name, base_url, model) = manual::validate(&input, true)?;
+        let ks = key_store().ok_or_else(|| AppError::new("no_home", "no config folder"))?;
+        let key = input.key.trim().to_string();
+        let mut a = app.lock().await;
+        let id = manual::new_id();
+        let key_store = ks.save(&id, &key)?;
+        a.state.manual.push(ManualEntry { id: id.clone(), name, base_url, format: input.format, model, key_store, key_masked: settings::mask_secret(&key) });
+        if let Some(f) = state_file() {
+            if let Err(e) = save_state(&f, &a.state) {
+                a.state.manual.retain(|e| e.id != id);
+                let _ = ks.delete(&id);
+                return Err(e);
+            }
+        }
+        refresh_manual(&mut a);
+        Ok((id, view(&a)))
+    }
+
+    #[tauri::command]
+    pub async fn update_manual(app: State<'_, Shared>, id: String, input: ManualInput) -> R<View> {
+        let (name, base_url, model) = manual::validate(&input, false)?;
+        let ks = key_store().ok_or_else(|| AppError::new("no_home", "no config folder"))?;
+        let mut a = app.lock().await;
+        let idx = a.state.manual.iter().position(|e| e.id == id).ok_or_else(|| AppError::new("not_found", "no such entry"))?;
+        let key = input.key.trim().to_string();
+        let mut e = a.state.manual[idx].clone();
+        if !key.is_empty() {
+            e.key_store = ks.save(&id, &key)?;
+            e.key_masked = settings::mask_secret(&key);
+        }
+        e.name = name;
+        e.base_url = base_url;
+        e.format = input.format;
+        e.model = model;
+        a.state.manual[idx] = e;
+        if let Some(f) = state_file() {
+            save_state(&f, &a.state)?;
+        }
+        refresh_manual(&mut a);
+        Ok(view(&a))
+    }
+
+    #[tauri::command]
+    pub async fn delete_manual(app: State<'_, Shared>, id: String) -> R<View> {
+        let mut a = app.lock().await;
+        if view(&a).active_id.as_deref() == Some(id.as_str()) {
+            return Err(AppError::new("in_use", "Claude Code is using this entry"));
+        }
+        if !a.state.manual.iter().any(|e| e.id == id) {
+            return Err(AppError::new("not_found", "no such entry"));
+        }
+        if let Some(ks) = key_store() {
+            ks.delete(&id)?;
+        }
+        a.state.manual.retain(|e| e.id != id);
+        a.state.thinking.remove(&id);
+        if let Some(f) = state_file() {
+            save_state(&f, &a.state)?;
+        }
+        refresh_manual(&mut a);
+        Ok(view(&a))
+    }
+
+    /// Probe an address from the form: suggests the format and lists models when the source offers them.
+    /// `id` lets the edit form use the saved key when the key field is left empty.
+    #[tauri::command]
+    pub async fn detect_manual(app: State<'_, Shared>, base_url: String, key: Option<String>, id: Option<String>) -> R<manual::Detected> {
+        let key = match key.map(|k| k.trim().to_string()).filter(|k| !k.is_empty()) {
+            Some(k) => {
+                settings::validate_key(&k)?;
+                Some(k)
+            }
+            None => match id {
+                Some(id) => stored_key(&app.lock().await.state, &id),
+                None => None,
+            },
+        };
+        let o = manual::probe(&base_url, key.as_deref()).await?;
+        Ok(manual::judge_format(&base_url, &o))
     }
 
     #[tauri::command]
@@ -562,7 +755,7 @@ async fn startup() -> App {
             match proxy::start(port, token).await {
                 Ok(p) => {
                     match resolve_key(&act.key, &act.source_id, &app.state) {
-                        Some(k) => *p.inner.route.write().await = Some(proxy::Route { upstream_base: act.upstream_base.clone(), upstream_key: k, model: act.model.clone() }),
+                        Some(k) => *p.inner.route.write().await = Some(proxy::Route { upstream_base: act.upstream_base.clone(), upstream_key: k, model: act.model.clone(), reasoning_effort: act.reasoning_effort.clone() }),
                         None => app.proxy_error = Some("key_gone".into()),
                     }
                     app.proxy = Some(p);
@@ -601,6 +794,11 @@ pub fn run() {
             commands::test_source,
             commands::use_source,
             commands::set_key,
+            commands::set_thinking,
+            commands::add_manual,
+            commands::update_manual,
+            commands::delete_manual,
+            commands::detect_manual,
             commands::restore,
             commands::use_official,
             commands::open_wickrunai,
@@ -677,11 +875,17 @@ mod tests {
         let f = d.path().join("x").join("gui-state.json");
         let mut st = GuiState::default();
         st.proxy_port = Some(41000);
-        st.active = Some(Active { source_id: "keys:openai".into(), name: "OpenAI".into(), model: "gpt".into(), route: Route::Translate, upstream_base: "https://api.openai.com/v1".into(), key: KeyRef::Env("OPENAI_API_KEY".into()) });
+        st.active = Some(Active { source_id: "keys:openai".into(), name: "OpenAI".into(), model: "gpt".into(), route: Route::Translate, upstream_base: "https://api.openai.com/v1".into(), key: KeyRef::Env("OPENAI_API_KEY".into()), thinking: Level::High, reasoning_effort: Some("high".into()) });
         save_state(&f, &st).unwrap();
         let back = load_state(&f);
         assert_eq!(back.proxy_port, Some(41000));
-        assert_eq!(back.active.unwrap().key, KeyRef::Env("OPENAI_API_KEY".into()));
+        let act = back.active.unwrap();
+        assert_eq!(act.key, KeyRef::Env("OPENAI_API_KEY".into()));
+        assert_eq!((act.thinking, act.reasoning_effort.as_deref()), (Level::High, Some("high")));
+        // a 0.2.0 state file (no thinking, no manual entries) still loads
+        let old: GuiState = serde_json::from_str(r#"{"version":1,"proxy_port":1,"active":{"source_id":"a","name":"A","model":"m","route":"direct","upstream_base":"https://x","key":"None"}}"#).unwrap();
+        assert_eq!(old.active.unwrap().thinking, Level::Default);
+        assert!(old.manual.is_empty());
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

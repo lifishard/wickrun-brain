@@ -42,6 +42,8 @@ pub enum KeyRef {
     Placeholder(String),
     /// Pasted by the user into the app
     Pasted,
+    /// An entry the user added by hand: the key is in the keychain or the fallback file
+    Stored { id: String },
     None,
 }
 

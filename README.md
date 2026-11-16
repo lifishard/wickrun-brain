@@ -35,6 +35,29 @@ The installers are not signed yet, so your system will warn you the first time:
 
 Languages: Simplified Chinese, Traditional Chinese (Hong Kong) and English. The app follows your system language; switch at the top right. Light and dark follow your system.
 
+### Add manually
+
+At the bottom of the list, **Add manually** is for a source the app cannot find by itself, for example a relay service that gave you an address and a key. Fill in a name, the address, the key and the model, and pick the format it speaks:
+
+- **Anthropic format**: Claude Code talks to it directly.
+- **OpenAI-compatible**: it goes through the built-in translator.
+
+Not sure which? Press **Detect**: the app sends empty requests to `/v1/messages` and `/chat/completions` at that address (with your key, only to that address) and selects the format that answers. Anthropic format wins when both answer. **Fetch models** fills the model list when the source offers one; otherwise type the name from its guide.
+
+Saved entries appear under **Added by you**, can be edited and deleted, and go through the same **Test** and **Use for Claude Code** steps and safety rules as everything else. The key goes into the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux). Only if no keychain is available is it written to a private file, `manual-keys.json` (mode 0600) in the app's folder; **Details** says which. The command line tool's `profiles.json` is not used for these entries, so its file and behaviour are unchanged.
+
+### Thinking level
+
+Each ready source has a **Thinking** control: Default, Off, Low, Medium, High. **Default** writes nothing. The level is saved per source, written when you press **Use for Claude Code**, and **Restore original** removes it byte-for-byte with everything else. What it does depends on the connection:
+
+| Source | What the app writes | Source of the rule |
+| --- | --- | --- |
+| Direct (Anthropic format) | Off: `MAX_THINKING_TOKENS=0`. Low/Medium/High: `CLAUDE_CODE_EFFORT_LEVEL=low/medium/high`, plus `CLAUDE_CODE_ALWAYS_ENABLE_EFFORT=1` for services other than `api.anthropic.com` (Claude Code otherwise sends effort only for model ids it recognises). All in the `env` block of `settings.json` | [Environment variables](https://code.claude.com/docs/en/env-vars), [Model configuration](https://code.claude.com/docs/en/model-config) |
+| Through the translator, OpenAI / Google Gemini / Groq | Nothing in `settings.json`. The translator adds `reasoning_effort` (`none`/`low`/`medium`/`high`) to each request. If a model refuses that parameter, the request is sent once more without it, and **Test** says so | [OpenAI](https://developers.openai.com/api/docs/guides/reasoning), [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), [Groq](https://console.groq.com/docs/reasoning) |
+| Through the translator, any other source | Nothing. The control stays on Default and says that the source has no documented setting | |
+
+Limits worth knowing: newer Claude models always think, so Off has no effect on them; a third-party Anthropic-format service decides itself whether it honours the effort level; switching with the command line tool afterwards leaves the app's thinking values in place until **Restore original** or **Use my Claude login**, which put back the values your original file had.
+
 ## Two ways to connect
 
 Claude Code speaks one format: the Anthropic Messages API. Sources connect in one of two ways:
@@ -82,7 +105,7 @@ The app keeps every rule of the command line tool below:
 - Before the first change it saves the original bytes next to it (`settings.json.before-wickrun-brain`); **Restore original** writes them back byte-for-byte. The app and the command line tool share this backup, so either can undo the other.
 - Every choice carries its own key. Setting only an address would make Claude Code send your claude.ai login there, so the app never does that.
 - If the wickrunAI app is managing Claude Code, the app refuses to change anything and tells you to switch inside wickrunAI.
-- Writes are atomic (temporary file, then rename). Keys are never shown in full, never logged, and never sent anywhere except to the source you chose. A key you paste is kept in the app's own file (`~/.config/wickrun-brain/gui-state.json`, `%APPDATA%\wickrun-brain\` on Windows, mode 0600 on macOS and Linux).
+- Writes are atomic (temporary file, then rename). Keys are never shown in full, never logged, and never sent anywhere except to the source you chose. Keys of entries you add by hand go into the system keychain (see Add manually). A key you paste for a found source is kept in the app's own file (`~/.config/wickrun-brain/gui-state.json`, `%APPDATA%\wickrun-brain\` on Windows, mode 0600 on macOS and Linux).
 - Network use: looking for local servers on 127.0.0.1, listing models and the **Test** request to the source you picked, and the translator when you use it. Nothing else, no telemetry.
 
 **macOS note:** apps started from the Dock do not see variables set in your shell. The app reads `export` lines from your shell profile for that reason; keys set some other way (for example by a secrets manager at shell start) may not be found. Paste them instead.

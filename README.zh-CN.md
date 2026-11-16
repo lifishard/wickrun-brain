@@ -35,6 +35,29 @@
 
 界面语言：简体中文、繁体中文（香港用语）、English。默认跟随系统语言，右上角可以切换。浅色和深色跟随系统。
 
+### 手动添加
+
+列表最下面的 **手动添加**，用来加入应用自己找不到的来源，例如中转服务给你的地址和密钥。填好名称、地址、密钥和模型，再选它用的格式：
+
+- **Anthropic 格式**：Claude Code 直接和它对话
+- **OpenAI 兼容**：经内置转换器
+
+不确定是哪种？按 **自动识别**：应用会向这个地址的 `/v1/messages` 和 `/chat/completions` 发空请求（带上你的密钥，只发给这个地址），选出有回应的格式；两种都有回应时选 Anthropic 格式。来源有提供模型列表时，**获取模型列表** 会把它填进去；没有的话按说明输入模型名称。
+
+保存后的条目在 **你添加的** 分组里，可以编辑和删除，测试、「给 Claude Code 用」和所有安全规则都和其他来源一样。密钥存放在系统钥匙串（macOS 钥匙串、Windows 凭据管理器、Linux 的 Secret Service）；只有系统钥匙串用不了时，才写进应用文件夹里的私有文件 `manual-keys.json`（权限 0600），**详情** 里会写明是哪一种。这些条目不使用命令行工具的 `profiles.json`，命令行工具的文件和行为都不变。
+
+### 思考级别
+
+每个可用来源都有 **思考** 控件：默认、关、低、中、高。**默认** 什么都不写。级别按来源保存，按「给 Claude Code 用」时写入，**恢复原有设置** 会连同其他改动一起逐字节还原。实际效果取决于连接方式：
+
+| 来源 | 应用写入什么 | 依据 |
+| --- | --- | --- |
+| 直连（Anthropic 格式） | 关：`MAX_THINKING_TOKENS=0`。低／中／高：`CLAUDE_CODE_EFFORT_LEVEL=low/medium/high`；不是 `api.anthropic.com` 的服务再加 `CLAUDE_CODE_ALWAYS_ENABLE_EFFORT=1`（否则 Claude Code 只对认得的模型名发送 effort）。都写在 `settings.json` 的 `env` 里 | [环境变量](https://code.claude.com/docs/en/env-vars)、[模型配置](https://code.claude.com/docs/en/model-config) |
+| 经转换器：OpenAI、Google Gemini、Groq | `settings.json` 不写。转换器在每个请求里加上 `reasoning_effort`（`none`/`low`/`medium`/`high`）。模型拒绝这个参数时，会去掉它再发一次，**测试** 也会说明 | [OpenAI](https://developers.openai.com/api/docs/guides/reasoning)、[Gemini OpenAI 兼容](https://ai.google.dev/gemini-api/docs/openai)、[Groq](https://console.groq.com/docs/reasoning) |
+| 经转换器：其他来源 | 不写。控件停在默认，并说明这个来源没有公开的思考设置 | |
+
+需要知道的限制：较新的 Claude 模型一直会思考，选关对它们没有作用；第三方 Anthropic 格式服务用不用 effort 级别由它自己决定；之后若用命令行工具切换，应用写入的思考设置会保留，直到 **恢复原有设置** 或 **用我的 Claude 登录** 把它们还原成原文件里的值。
+
 ## 两种连接方式
 
 Claude Code 只说一种格式：Anthropic Messages API。来源有两种接法：
@@ -82,7 +105,7 @@ Claude Code 只说一种格式：Anthropic Messages API。来源有两种接法�
 - 第一次改动前，把原文件按字节存一份在旁边（`settings.json.before-wickrun-brain`）；**恢复原有设置**会一字不差地写回去。应用和命令行工具共用这份备份，谁改的都能由另一方还原。
 - 每个选择都带上自己的密钥。只设地址会让 Claude Code 把你的 claude.ai 登录发到那个地址，所以应用绝不这样做。
 - 如果 wickrunAI 正在管理 Claude Code，应用不做任何改动，并提示你在 wickrunAI 里切换。
-- 写文件是原子操作（先写临时文件再改名）。密钥从不完整显示、从不写进日志，只发给你选中的来源。你粘贴的密钥存在应用自己的文件里（`~/.config/wickrun-brain/gui-state.json`，Windows 是 `%APPDATA%\wickrun-brain\`，macOS 和 Linux 上权限为 0600）。
+- 写文件是原子操作（先写临时文件再改名）。密钥从不完整显示、从不写进日志，只发给你选中的来源。手动添加的条目，密钥存放在系统钥匙串（见「手动添加」）；为找到的来源粘贴的密钥存在应用自己的文件里（`~/.config/wickrun-brain/gui-state.json`，Windows 是 `%APPDATA%\wickrun-brain\`，macOS 和 Linux 上权限为 0600）。
 - 联网只有这几种：在 127.0.0.1 上查找本机服务、向你选的来源列出模型和发送**测试**请求，以及你使用转换器时的转发。没有其他请求，没有遥测。
 
 **macOS 提示：** 从程序坞启动的应用看不到你在 shell 里设置的变量，所以应用会读取 shell 配置文件里的 `export` 行；用其他方式设置的密钥（例如 shell 启动时由密码管理器注入）可能找不到，直接粘贴即可。

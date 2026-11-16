@@ -357,6 +357,8 @@ pub enum Auth {
 
 pub struct Target<'a> {
     pub base_url: &'a str,
+    /// Thinking variables to write (see `thinking_env`). Empty: keep the original values.
+    pub thinking: Vec<(&'static str, String)>,
     pub auth: Auth,
     /// Always required: never point Claude Code at another address without its own key,
     /// or it would send the user's claude.ai login there.
@@ -395,6 +397,83 @@ fn without_managed(data: &Map<String, Value>) -> Map<String, Value> {
     next
 }
 
+/* ------------------------------------------------------------ thinking */
+
+/// The thinking level a user picked for one source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Level {
+    /// Write nothing: Claude Code (or the upstream) decides
+    #[default]
+    Default,
+    Off,
+    Low,
+    Medium,
+    High,
+}
+
+/// Environment variables Claude Code documents for thinking and effort
+/// (https://code.claude.com/docs/en/env-vars, https://code.claude.com/docs/en/model-config).
+/// These are not MANAGED_KEYS: a user's own values stay unless a level is chosen, and
+/// every switch first puts back the values the original settings.json had.
+pub const THINKING_KEYS: [&str; 3] = ["MAX_THINKING_TOKENS", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_ALWAYS_ENABLE_EFFORT"];
+
+/// What to write for a direct (Anthropic format) source.
+/// Off: MAX_THINKING_TOKENS=0. Low/Medium/High: CLAUDE_CODE_EFFORT_LEVEL, plus
+/// CLAUDE_CODE_ALWAYS_ENABLE_EFFORT=1 for services other than Anthropic, because Claude Code
+/// only sends effort for model ids it recognises unless that is set.
+pub fn thinking_env(level: Level, anthropic_official: bool) -> Vec<(&'static str, String)> {
+    let effort = |l: &str| {
+        let mut v = vec![("CLAUDE_CODE_EFFORT_LEVEL", l.to_string())];
+        if !anthropic_official {
+            v.push(("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT", "1".to_string()));
+        }
+        v
+    };
+    match level {
+        Level::Default => vec![],
+        Level::Off => vec![("MAX_THINKING_TOKENS", "0".to_string())],
+        Level::Low => effort("low"),
+        Level::Medium => effort("medium"),
+        Level::High => effort("high"),
+    }
+}
+
+/// The settings as they were before this app first changed them: the backup if there is one,
+/// otherwise the current file (which becomes the backup on this change).
+fn original_data(s: &Settings) -> Map<String, Value> {
+    let b = with_suffix(&s.file, BACKUP_SUFFIX);
+    if b.exists() {
+        return fs::read(&b)
+            .ok()
+            .and_then(|raw| String::from_utf8(raw).ok())
+            .and_then(|t| serde_json::from_str::<Value>(t.trim_start_matches('\u{feff}')).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+    }
+    if with_suffix(&s.file, ABSENT_SUFFIX).exists() {
+        return Map::new();
+    }
+    s.data.clone()
+}
+
+/// Put the thinking variables back to their original values (or remove them).
+fn reset_thinking(next: &mut Map<String, Value>, original: &Map<String, Value>) {
+    let orig_env = env_obj(original);
+    let mut env = env_obj(next);
+    for k in THINKING_KEYS {
+        match orig_env.get(k) {
+            Some(v) => { env.insert(k.into(), v.clone()); }
+            None => { env.remove(k); }
+        }
+    }
+    if env.is_empty() {
+        next.remove("env");
+    } else {
+        next.insert("env".into(), Value::Object(env));
+    }
+}
+
 fn apply_data(s: &Settings, next: &Map<String, Value>) -> Result<Changed> {
     let bytes = serialize_settings(s, next);
     if s.exists && bytes == s.raw {
@@ -419,8 +498,12 @@ pub fn apply(file: &Path, t: &Target) -> Result<Changed> {
     let s = read_settings(file)?;
     refuse_if_desktop(&s)?;
     let mut next = without_managed(&s.data);
+    reset_thinking(&mut next, &original_data(&s));
     let mut env = env_obj(&next);
     env.insert("ANTHROPIC_BASE_URL".into(), Value::String(t.base_url.into()));
+    for (k, v) in &t.thinking {
+        env.insert((*k).into(), Value::String(v.clone()));
+    }
     let var = match t.auth { Auth::Bearer => "ANTHROPIC_AUTH_TOKEN", Auth::ApiKey => "ANTHROPIC_API_KEY" };
     env.insert(var.into(), Value::String(t.key.into()));
     for k in MODEL_KEYS {
@@ -434,11 +517,12 @@ pub fn apply(file: &Path, t: &Target) -> Result<Changed> {
 pub fn official(file: &Path) -> Result<Changed> {
     let s = read_settings(file)?;
     refuse_if_desktop(&s)?;
-    let env = env_obj(&s.data);
-    if !MANAGED_KEYS.iter().any(|k| env.contains_key(*k)) {
+    let mut next = without_managed(&s.data);
+    reset_thinking(&mut next, &original_data(&s));
+    if next == s.data {
         return Ok(Changed { changed: false, created_backup: false });
     }
-    apply_data(&s, &without_managed(&s.data))
+    apply_data(&s, &next)
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -487,7 +571,7 @@ mod tests {
     const ORIGINAL: &str = "{\n    \"theme\": \"dark\",\n    \"env\": { \"MY_OWN_VAR\": \"keep me\", \"ANTHROPIC_MODEL\": \"user-model\" },\n    \"unicode\": \"中文 é\"\n}";
 
     fn sha(b: &[u8]) -> Vec<u8> { Sha256::digest(b).to_vec() }
-    fn tgt() -> Target<'static> { Target { base_url: "https://llm.example.com", auth: Auth::Bearer, key: SECRET, model: "gw-model-1" } }
+    fn tgt() -> Target<'static> { Target { base_url: "https://llm.example.com", thinking: vec![], auth: Auth::Bearer, key: SECRET, model: "gw-model-1" } }
     fn setup(content: Option<&str>) -> (tempfile::TempDir, PathBuf) {
         let d = tempfile::Builder::new().prefix("wb gui ").tempdir().unwrap();
         let f = d.path().join("claude config").join("settings.json");
@@ -647,5 +731,51 @@ mod tests {
         assert_eq!(settings_path(&none, Some("/h".into())).unwrap(), PathBuf::from("/h/.claude/settings.json"));
         let rel = |k: &str| if k == "CLAUDE_CONFIG_DIR" { Some("rel".to_string()) } else { None };
         assert!(settings_path(&rel, Some("/h".into())).is_err());
+    }
+
+    #[test]
+    fn thinking_env_per_level() {
+        assert!(thinking_env(Level::Default, false).is_empty());
+        assert_eq!(thinking_env(Level::Off, false), vec![("MAX_THINKING_TOKENS", "0".to_string())]);
+        assert_eq!(thinking_env(Level::High, true), vec![("CLAUDE_CODE_EFFORT_LEVEL", "high".to_string())]);
+        assert_eq!(thinking_env(Level::Low, false), vec![("CLAUDE_CODE_EFFORT_LEVEL", "low".to_string()), ("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT", "1".to_string())]);
+        let l: Level = serde_json::from_str("\"medium\"").unwrap();
+        assert_eq!(l, Level::Medium);
+    }
+
+    #[test]
+    fn thinking_is_written_replaced_and_restored_byte_exactly() {
+        let orig = "{\n  \"env\": { \"CLAUDE_CODE_EFFORT_LEVEL\": \"xhigh\", \"KEEP\": \"1\" }\n}\n";
+        let (_d, f) = setup(Some(orig));
+        // Off on a direct source
+        apply(&f, &Target { thinking: thinking_env(Level::Off, false), ..tgt() }).unwrap();
+        let v: Value = serde_json::from_slice(&fs::read(&f).unwrap()).unwrap();
+        assert_eq!(v["env"]["MAX_THINKING_TOKENS"], "0");
+        assert_eq!(v["env"]["CLAUDE_CODE_EFFORT_LEVEL"], "xhigh"); // the user's own value is untouched by Off
+        // switching to Low replaces ours and does not leave MAX_THINKING_TOKENS behind
+        apply(&f, &Target { thinking: thinking_env(Level::Low, false), ..tgt() }).unwrap();
+        let v: Value = serde_json::from_slice(&fs::read(&f).unwrap()).unwrap();
+        assert!(v["env"].get("MAX_THINKING_TOKENS").is_none());
+        assert_eq!(v["env"]["CLAUDE_CODE_EFFORT_LEVEL"], "low");
+        assert_eq!(v["env"]["CLAUDE_CODE_ALWAYS_ENABLE_EFFORT"], "1");
+        // Default puts the user's original value back
+        apply(&f, &tgt()).unwrap();
+        let v: Value = serde_json::from_slice(&fs::read(&f).unwrap()).unwrap();
+        assert_eq!(v["env"]["CLAUDE_CODE_EFFORT_LEVEL"], "xhigh");
+        assert!(v["env"].get("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT").is_none());
+        apply(&f, &Target { thinking: thinking_env(Level::High, true), ..tgt() }).unwrap();
+        assert_eq!(restore(&f).unwrap(), Restored::Identical);
+        assert_eq!(fs::read(&f).unwrap(), orig.as_bytes());
+    }
+
+    #[test]
+    fn official_removes_our_thinking_values_too() {
+        let (_d, f) = setup(None);
+        apply(&f, &Target { thinking: thinking_env(Level::Medium, false), ..tgt() }).unwrap();
+        official(&f).unwrap();
+        let v: Value = serde_json::from_slice(&fs::read(&f).unwrap()).unwrap();
+        assert!(v.get("env").is_none());
+        assert_eq!(restore(&f).unwrap(), Restored::RemovedAgain);
+        assert!(!f.exists());
     }
 }

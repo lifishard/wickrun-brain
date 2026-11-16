@@ -1,0 +1,7 @@
+{
+  "messages_status": 401,
+  "messages_body": {"type": "error", "error": {"type": "authentication_error", "message": "invalid x-api-key"}},
+  "chat_status": 401,
+  "chat_body": {"error": {"message": "Invalid token"}},
+  "models_status": 401
+}

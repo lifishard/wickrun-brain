@@ -1,0 +1,9 @@
+{
+  "messages_status": 400,
+  "messages_body": {"type": "error", "error": {"type": "invalid_request_error", "message": "model: Field required"}},
+  "chat_base": "https://relay.example.com/v1",
+  "chat_status": 400,
+  "chat_body": {"error": {"message": "model is required", "type": "invalid_request_error"}},
+  "models_status": 200,
+  "models_body": {"object": "list", "data": [{"id": "claude-sonnet-5", "object": "model"}, {"id": "gpt-5.2", "object": "model"}]}
+}
